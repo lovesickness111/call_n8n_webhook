@@ -1,3 +1,5 @@
+const { log } = require("console");
+
 // Dynamically import node-fetch
 const express = require("express"),
   app = express(),
@@ -36,8 +38,8 @@ app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 
 // Write the summary data to a file
 async function writeSummaryData(req, res) {
-  if(!req){
-    req = {headers: {}}; // mock request
+  if (!req) {
+    req = { headers: {} }; // mock request
   }
   // Access and log the data
   console.log("input:" + listDebugData.length);
@@ -48,7 +50,7 @@ async function writeSummaryData(req, res) {
     return delay(index * 500).then(() => {
       delete req.headers["host"];
       // template log data
-      let logData = { "input_paper": data };
+      let logData = { input_paper: data };
 
       return axios
         .post(
@@ -58,8 +60,8 @@ async function writeSummaryData(req, res) {
             httpsAgent: new (require("https").Agent)({
               rejectUnauthorized: false,
             }), // Disable SSL certificate validation
-            data: {"chatInput": data},
-          },
+            data: { chatInput: data },
+          }
         )
         .then((response) => {
           const mergedData = mergeDataSets(response.data, data);
@@ -93,23 +95,52 @@ async function writeSummaryData(req, res) {
     } else {
     }
   });
-};
+}
 // xử lý response từ n8n
 function mergeDataSets(dataSets, input_paper) {
-  return dataSets.flatMap(set => 
-    set.data.map(item => ({
+  return dataSets.flatMap((set) =>
+    set.data.map((item) => ({
       ...item,
       instruction_type: set.instruction_type,
-      input_paper: input_paper
+      input_paper: input_paper,
     }))
   );
 }
 
-
 // nhả api ra localhost:3000/write để thực hiện lại
 app.post("/write", async (req, res) => {
   await writeSummaryData(req, res);
+  res.send("done");
 });
+// nhả api ra localhost:3000/read để đọc json
+app.post("/read", async (req, res) => {
+  await readSummaryData("summary_1738894233453", req, res);
+});
+async function readSummaryData(filename, req, res) {
+  fs.readFile(`summary/${filename}.json`, "utf8", (err, data) => {
+    if (err) {
+      console.error("Error reading the file:", err);
+      return;
+    }
+
+    // Step 3: Parse the JSON string to an object
+    const jsonObj = JSON.parse(data);
+    let response = [];
+    let errorArray = [];
+    jsonObj.forEach((obj) => {
+      if (Array.isArray(obj)) {
+        obj.forEach((element) => {
+          if (element.instruction_type != "Error") {
+            response.push(element);
+          }
+        });
+      } else{
+        errorArray.push(obj);
+      }
+    });
+    res.send(response);
+  });
+}
 //#endregion
 
 app.listen(3000, () => {
